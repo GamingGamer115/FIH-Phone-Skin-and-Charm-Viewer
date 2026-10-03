@@ -1,6 +1,6 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Phone Skin + Charm Viewer</title>
+<title>Phone Skin + Charm Viewer v0.5.21</title>
 <style>
 :root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#eceef2;--panel:#fff;--fg:#14161a;--mut:#6b7280;--ac:#3b6cff;--bd:#d9dce3}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0e1013;--panel:#181b21;--fg:#eef0f4;--mut:#8b93a1;--ac:#6c8cff;--bd:#2a2f38}}
@@ -71,18 +71,18 @@ button.b{transition:background .12s,border-color .12s}button.b:hover:not(:disabl
 <details class="section"><summary><span class="sumtitle">Appearance</span><span class="sumhint">Material & Lighting</span></summary><div class="sectionbody">
 <div class="group"><small>Material finish</small><div class="btnrow" id="finishes"><button class="b" data-finish="matte">Matte</button><button class="b" data-finish="satin">Satin</button><button class="b" data-finish="glossy">Glossy</button><button class="b" data-finish="metallic">Metallic</button></div></div>
 <div class="group"><label for="gl">Shininess</label><div class="strength-row"><input type="range" id="gl" min="0" max="1" step="0.01" value="0.55"><input type="number" id="glNumber" min="0" max="1" step="0.01" value="0.55" aria-label="Shininess numeric value"></div></div>
-<div class="group"><label for="emPower">Emission strength</label><div class="strength-row"><input type="range" id="emPower" min="0" max="5" step="0.05" value="1"><input type="number" id="emPowerNumber" min="0" max="5" step="0.05" value="1" aria-label="Emission strength numeric value"></div></div>
+<div class="group"><label for="emPower">Emission strength</label><div class="strength-row"><input type="range" id="emPower" min="0" max="5" step="0.05" value="1"><input type="number" id="emPowerNumber" min="0" max="5" step="0.05" value="1" aria-label="Emission strength numeric value"></div></div><button class="b" id="resetAppearance" hidden>Reset Appearance</button>
 </div></details>
 <details class="section"><summary><span class="sumtitle">Camera & scene</span><span class="sumhint">View options</span></summary><div class="sectionbody">
 <label>Auto-rotate <input type="checkbox" id="rot"></label><label>Outline <input type="checkbox" id="out"></label><label>Background <input type="color" id="bg"></label>
-<div class="group"><small>Camera view</small><div class="btnrow" id="views"><button class="b" data-view="front">Front</button><button class="b" data-view="back">Back</button><button class="b" data-view="left">Left</button><button class="b" data-view="right">Right</button><button class="b" data-view="top">Top</button></div><button class="b" id="cameraReset">Reset camera</button></div>
+<div class="group"><small>Camera view</small><div class="btnrow" id="views"><button class="b" data-view="front">Top</button><button class="b" data-view="back">Bottom</button><button class="b" data-view="left">Left</button><button class="b" data-view="right">Right</button><button class="b" data-view="top">Front</button><button class="b" data-view="bottom">Back</button></div><button class="b" id="cameraReset">Reset camera</button></div>
 </div></details>
 <details class="section" id="hatBox"><summary><span class="sumtitle">Charm</span><span class="sumhint">Position & Physics</span></summary><div class="sectionbody">
 <div id="hatDrop" class="uploadzone" role="button" tabindex="0" aria-label="Upload charm bundle"><span class="uploadicon">＋</span><strong>Drop a charm bundle</strong><span>or <u>browse files</u></span><small>Unity asset bundle / .hatbundle</small><input id="hatF" type="file" hidden></div><div class="filemeta hint" id="hatMsg" aria-live="polite">No charm loaded yet</div>
 <div id="hatCtl" style="display:none;flex-direction:column;gap:8px">
-<label>Show charm <input type="checkbox" id="hatShow" checked></label><label>Flip charm <input type="checkbox" id="hatFlip"></label>
+<label>Hide Phone <input type="checkbox" id="hidePhone"></label><label>Show charm <input type="checkbox" id="hatShow" checked></label><label>Flip charm <input type="checkbox" id="hatFlip"></label>
 <details class="subsection"><summary>Physics & interaction</summary><div class="sectionbody">
-<label>Charm physics (cloth) <input type="checkbox" id="phys"></label><label>Drag to test <input type="checkbox" id="physDrag" disabled></label>
+<label>Charm physics (cloth) <input type="checkbox" id="phys"></label><label>Disable Phone Collision <input type="checkbox" id="disablePhoneCollision" disabled></label><label>Drag to test <input type="checkbox" id="physDrag" disabled></label><label>Drag to Rotate phone <input type="checkbox" id="phoneRotateDrag"></label><button class="b" id="phoneRotationReset" hidden>Reset phone rotation</button>
 <div id="physOpts" style="display:none;flex-direction:column;gap:8px"><div class="hatrow"><span>Gravity</span><input type="number" id="physG" value="40" step="5" min="0" aria-label="Gravity"></div><div class="hatrow"><span>Damping</span><input type="number" id="physD" value="20" step="1" min="0" aria-label="Damping"></div><div class="btnrow"><button class="b" id="physReset">Reset physics</button></div></div>
 <div class="hint" id="physHint">Enable physics and “Drag to test” to interact with the charm. Drag empty space to orbit.</div>
 </div></details>
@@ -277,7 +277,9 @@ const r=new THREE.DirectionalLight(0xffffff,0.5);r.position.set(-3,1,-3);scene.a
 function resize(){const w=Math.max(1,view.clientWidth),h=Math.max(1,view.clientHeight);ren.setSize(w,h);cam.aspect=w/h;cam.updateProjectionMatrix()}
 addEventListener('resize',resize);
 const mats=[],orig=[],origEmission=[],outl=[];
-let modelSize=1, defaultCamera=null;
+const phoneVisibilityDefaults=new WeakMap();
+let appearanceDefaults=[];
+let modelSize=1, defaultCamera=null, phoneDefaultRotation=null, phoneRotatePointer=null, phoneRotationVelocity=new THREE.Vector3(), phoneRotationAxis=new THREE.Vector3(), phoneRotationDelta=new THREE.Quaternion(), phoneCameraQuaternion=new THREE.Quaternion(), phoneParentQuaternion=new THREE.Quaternion(), phoneRotationLastTime=0;
 const textureHistory=[{undo:[],redo:[]},{undo:[],redo:[]},{undo:[],redo:[]}];
 let finish='custom';
 const bin=Uint8Array.from(atob(GLB),c=>c.charCodeAt(0));
@@ -291,13 +293,14 @@ new THREE.GLTFLoader().parse(bin.buffer,'',g=>{
     });
   });
   mats.sort((a,b)=>/Screen/i.test(a.name)-/Screen/i.test(b.name));
+  appearanceDefaults=mats.map(m=>({roughness:m.roughness,metalness:m.metalness}));
   mats.forEach(m=>{orig.push(m.map);origEmission.push(m.emissiveMap||null);m.userData.__originalEmissiveColor=m.emissive.clone();m.userData.__originalEmissiveIntensity=m.emissiveIntensity;});
   scene.add(root);window.phoneRoot=root;
   const box=new THREE.Box3().setFromObject(root),s=box.getSize(new THREE.Vector3()),c=box.getCenter(new THREE.Vector3());
   window.phoneBox=box.clone();
   {root.updateMatrixWorld(true);const bb=new THREE.Box3(),vis=q=>{for(;q;q=q.parent)if(!q.visible)return false;return true};
    root.traverse(m=>{if(m.isMesh&&vis(m)&&!/Outline/i.test(m.material&&m.material.name||''))bb.expandByObject(m)});window.phoneBody=bb.isEmpty()?box.clone():bb}
-  root.position.sub(c);modelSize=Math.max(s.x,s.y,s.z)||1;const d=modelSize*2.6;
+  root.position.sub(c);phoneDefaultRotation=root.quaternion.clone();modelSize=Math.max(s.x,s.y,s.z)||1;const d=modelSize*2.6;updatePhoneRotationReset();
   ctl.target.set(0,0,0);cam.position.set(d*.4,d*.2,d);ctl.update();defaultCamera={position:cam.position.clone(),target:ctl.target.clone()};$('msg').remove();resize();
 },e=>{$('msg').textContent='Failed to load model'});
 let tgt=0;
@@ -322,7 +325,7 @@ function cleanupUnusedTextures(){
 }
 addEventListener('pagehide',()=>{for(const url of previewUrls)URL.revokeObjectURL(url);previewUrls.clear();});
 function targetMaterial(index){return mats[index===2?0:index];}
-function setEmissionStrength(value){const n=Number(value);const v=Math.min(5,Math.max(0,Number.isFinite(n)?n:1));$('emPower').value=String(v);$('emPowerNumber').value=String(v);const m=targetMaterial(2);if(m&&m.emissiveMap){m.emissiveIntensity=v;m.emissive.set(0xffffff);m.needsUpdate=true;}}
+function setEmissionStrength(value){const n=Number(value);const v=Math.min(5,Math.max(0,Number.isFinite(n)?n:1));$('emPower').value=String(v);$('emPowerNumber').value=String(v);const m=targetMaterial(2);if(m&&m.emissiveMap){m.emissiveIntensity=v;m.emissive.set(0xffffff);m.needsUpdate=true;}updateAppearanceReset();}
 $('emPower').addEventListener('input',e=>setEmissionStrength(e.target.value));
 $('emPowerNumber').addEventListener('change',e=>setEmissionStrength(e.target.value));$('emPowerNumber').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();setEmissionStrength(e.target.value);e.target.blur();}});
 function getTargetMap(index){const m=targetMaterial(index);return m?(index===2?(m.emissiveMap||null):m.map):null;}
@@ -354,12 +357,48 @@ drop.addEventListener('dragenter',e=>{e.preventDefault();drop.classList.add('on'
 drop.addEventListener('dragleave',e=>{e.preventDefault();drop.classList.remove('on')});
 drop.addEventListener('drop',e=>{e.preventDefault();drop.classList.remove('on');apply(e.dataTransfer.files[0]);});
 $('rot').onchange=e=>ctl.autoRotate=e.target.checked;
+function phoneRotationChanged(){
+  const root=window.phoneRoot;
+  if(!root||!phoneDefaultRotation)return false;
+  return root.quaternion.angleTo(phoneDefaultRotation)>0.001;
+}
+function updatePhoneRotationReset(){
+  $('phoneRotationReset').hidden=!phoneRotationChanged();
+}
+$('phoneRotateDrag').addEventListener('change',e=>{
+  phoneRotatePointer=null;
+  phoneRotationVelocity.set(0,0,0);
+  ren.domElement.style.cursor=e.target.checked?'grab':'';
+});
+$('phoneRotationReset').addEventListener('click',()=>{
+  if(!window.phoneRoot||!phoneDefaultRotation)return;
+  phoneRotatePointer=null;
+  phoneRotationVelocity.set(0,0,0);
+  window.phoneRoot.quaternion.copy(phoneDefaultRotation);
+  window.phoneRoot.updateMatrixWorld(true);
+  updatePhoneRotationReset();
+});
 $('out').onchange=e=>outl.forEach(o=>o.visible=e.target.checked&&!/LOD[1-9]/.test(o.name));
-function setFinish(name){finish=name;const presets={matte:{roughness:.9,metalness:0},satin:{roughness:.55,metalness:.08},glossy:{roughness:.18,metalness:.05},metallic:{roughness:.28,metalness:.85}};const v=presets[name];if(!v)return;mats.forEach(m=>{m.roughness=v.roughness;m.metalness=v.metalness;m.needsUpdate=true});$('gl').value=String((1-v.roughness)/0.9);$('glNumber').value=String((1-v.roughness)/0.9);document.querySelectorAll('#finishes button').forEach(b=>b.classList.toggle('a',b.dataset.finish===name));}
-function setCamera(which){if(!defaultCamera)return;const d=modelSize*2.6;const positions={front:[0,0,d],back:[0,0,-d],left:[d,0,0],right:[-d,0,0],top:[0,d,0]};if(which==='reset'){cam.position.copy(defaultCamera.position);cam.up.set(0,1,0);ctl.target.copy(defaultCamera.target)}else{const v=positions[which];if(!v)return;cam.position.set(...v);ctl.target.set(0,0,0);cam.up.set(0,1,0);if(which==='top')cam.up.set(0,0,1)}cam.lookAt(ctl.target);ctl.update();}
+function setFinish(name){finish=name;const presets={matte:{roughness:.9,metalness:0},satin:{roughness:.55,metalness:.08},glossy:{roughness:.18,metalness:.05},metallic:{roughness:.28,metalness:.85}};const v=presets[name];if(!v)return;mats.forEach(m=>{m.roughness=v.roughness;m.metalness=v.metalness;m.needsUpdate=true});$('gl').value=String((1-v.roughness)/0.9);$('glNumber').value=String((1-v.roughness)/0.9);document.querySelectorAll('#finishes button').forEach(b=>b.classList.toggle('a',b.dataset.finish===name));updateAppearanceReset();}
+function setCamera(which){if(!defaultCamera)return;const d=modelSize*2.6,root=window.phoneRoot,q=root?root.quaternion:new THREE.Quaternion();const positions={front:[0,0,d],back:[0,0,-d],left:[d,0,0],right:[-d,0,0],top:[0,d,0],bottom:[0,-d,0]};const up=new THREE.Vector3(0,1,0);if(which==='reset'){ctl.target.copy(defaultCamera.target);cam.position.copy(defaultCamera.position);cam.up.set(0,1,0)}else{const v=positions[which];if(!v)return;cam.position.set(...v).applyQuaternion(q);ctl.target.set(0,0,0);cam.up.copy(up);if(which==='top')cam.up.set(0,0,1);else if(which==='bottom')cam.up.set(0,0,1);cam.up.applyQuaternion(q)}cam.lookAt(ctl.target);ctl.update();}
 document.querySelectorAll('#views button').forEach(b=>b.onclick=()=>setCamera(b.dataset.view));$('cameraReset').onclick=()=>setCamera('reset');
 document.querySelectorAll('#finishes button').forEach(b=>b.onclick=()=>setFinish(b.dataset.finish));
-function setShininess(value){const n=Number(value);const v=Math.min(1,Math.max(0,Number.isFinite(n)?n:0.55));$('gl').value=String(v);$('glNumber').value=String(v);const rough=1-v*0.9;mats.forEach(m=>{m.roughness=rough;m.needsUpdate=true;});finish='custom';document.querySelectorAll('#finishes button').forEach(b=>b.classList.remove('a'));}
+function setShininess(value){const n=Number(value);const v=Math.min(1,Math.max(0,Number.isFinite(n)?n:0.55));$('gl').value=String(v);$('glNumber').value=String(v);const rough=1-v*0.9;mats.forEach(m=>{m.roughness=rough;m.needsUpdate=true;});finish='custom';document.querySelectorAll('#finishes button').forEach(b=>b.classList.remove('a'));updateAppearanceReset();}
+function updateAppearanceReset(){
+  const finishSelected=!!document.querySelector('#finishes button.a');
+  const shininessChanged=Math.abs(Number($('gl').value)-0.55)>0.0001;
+  const emissionChanged=Math.abs(Number($('emPower').value)-1)>0.0001;
+  const materialChanged=mats.some((m,i)=>!appearanceDefaults[i]||Math.abs(m.roughness-appearanceDefaults[i].roughness)>0.0001||Math.abs(m.metalness-appearanceDefaults[i].metalness)>0.0001);
+  $('resetAppearance').hidden=!(finishSelected||shininessChanged||emissionChanged||materialChanged);
+}
+$('resetAppearance').addEventListener('click',()=>{
+  mats.forEach((m,i)=>{const d=appearanceDefaults[i];if(d){m.roughness=d.roughness;m.metalness=d.metalness;m.needsUpdate=true;}});
+  finish='custom';
+  document.querySelectorAll('#finishes button').forEach(b=>b.classList.remove('a'));
+  $('gl').value='0.55';$('glNumber').value='0.55';
+  setEmissionStrength(1);
+  updateAppearanceReset();
+});
 $('gl').addEventListener('input',e=>setShininess(e.target.value));
 $('glNumber').addEventListener('change',e=>setShininess(e.target.value));
 $('glNumber').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();setShininess(e.target.value);e.target.blur();}});
@@ -422,7 +461,9 @@ function placeHat(){
     .add(rotatedFlipOffset)
     .add(new THREE.Vector3(Number($('hx').value),Number($('hy').value),Number($('hz').value)));
 }
-function removeHat(){if(!hat.g)return;if(window.__physOnRemove)window.__physOnRemove();hat.g.parent&&hat.g.parent.remove(hat.g);hat.g.traverse(o=>{if(o.isMesh){o.geometry.dispose();if(o.material.map)o.material.map.dispose();o.material.dispose()}});hat.g=null;$('hatCtl').style.display='none';$('hatRemove').disabled=true}
+function removeHat(){if(!hat.g)return;if($('hidePhone').checked){$('hidePhone').checked=false;setPhoneHidden(false)}if(window.__physOnRemove)window.__physOnRemove();hat.g.parent&&hat.g.parent.remove(hat.g);hat.g.traverse(o=>{if(o.isMesh){o.geometry.dispose();if(o.material.map)o.material.map.dispose();o.material.dispose()}});hat.g=null;$('hatCtl').style.display='none';$('hatRemove').disabled=true}
+function isWithinCharmGroup(o,group){if(!group)return false;for(;o;o=o.parent)if(o===group)return true;return false;}
+function setPhoneHidden(hidden){const root=window.phoneRoot;if(!root)return;root.traverse(o=>{if(o===root||isWithinCharmGroup(o,hat.g))return;if(!phoneVisibilityDefaults.has(o))phoneVisibilityDefaults.set(o,o.visible);o.visible=hidden?false:phoneVisibilityDefaults.get(o)});}
 async function loadHat(file){
   if(!file)return;const hm=$('hatMsg');hm.textContent='Loading '+file.name+'…';
   try{
@@ -435,7 +476,7 @@ async function loadHat(file){
     hat.auto=1;if(!isFinite(ratio)||ratio<0.3||ratio>1){hat.auto=+(0.66*pl/b.len).toPrecision(3);fixed.push('size')}
     if(b.ax!==2||b.q.angleTo(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),Math.PI))>0.01)fixed.push('orientation');
     $('hatShow').checked=true;$('hatFlip').checked=false;['hx','hy','hz','rx','ry','rz'].forEach(i=>$(i).value=0);$('hs').value=hat.auto;
-    placeHat();$('hatCtl').style.display='flex';$('hatRemove').disabled=false;if(window.__physOnLoad)window.__physOnLoad();
+    placeHat();setPhoneHidden($('hidePhone').checked);$('hatCtl').style.display='flex';$('hatRemove').disabled=false;if(window.__physOnLoad)window.__physOnLoad();
     const t=parts[0].tex;hm.textContent='Loaded '+file.name+' · '+parts.length+' mesh'+(parts.length>1?'es':'')+(t?(t.error?' (texture: '+t.error+')':' with texture'):' (no texture found)')+(fixed.length?'. Auto-corrected '+fixed.join(' and ')+'.':'');
   }catch(e){hm.textContent='Could not read hatbundle: '+e.message}
 }
@@ -444,11 +485,36 @@ hd.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();$('hatF').c
 $('hatF').onchange=e=>{loadHat(e.target.files[0]);e.target.value=''};
 hd.addEventListener('dragover',e=>{e.preventDefault();hd.classList.add('on')});hd.addEventListener('dragleave',()=>hd.classList.remove('on'));
 hd.addEventListener('drop',e=>{e.preventDefault();hd.classList.remove('on');loadHat(e.dataTransfer.files[0])});
+$('hidePhone').onchange=e=>setPhoneHidden(e.target.checked);
 $('hatShow').onchange=e=>{if(hat.g)hat.g.visible=e.target.checked};
 ['hx','hy','hz','hs','rx','ry','rz'].forEach(i=>$(i).addEventListener('input',placeHat));$('hatFlip').addEventListener('change',placeHat);
 $('hatReset').onclick=()=>{['hx','hy','hz','rx','ry','rz'].forEach(i=>$(i).value=0);$('hs').value=hat.auto||1;$('hatFlip').checked=false;placeHat()};
 $('hatRemove').onclick=()=>{removeHat();$('hatMsg').textContent='Charm removed'};
-(function loop(){requestAnimationFrame(loop);ctl.update();if(window.__physFrame)window.__physFrame();ren.render(scene,cam)})();
+(function loop(){
+  requestAnimationFrame(loop);
+  ctl.update();
+  const now=performance.now()/1000,dt=phoneRotationLastTime?Math.min(0.05,Math.max(0,now-phoneRotationLastTime)):0;
+  phoneRotationLastTime=now;
+  if(!phoneRotatePointer&&$('phoneRotateDrag').checked&&window.phoneRoot&&dt>0){
+    const speed=phoneRotationVelocity.length();
+    if(speed>0.005){
+      const decay=Math.exp(-8*dt);
+      phoneRotationAxis.copy(phoneRotationVelocity).normalize();
+      phoneRotationDelta.setFromAxisAngle(phoneRotationAxis,speed*(1-decay)/8);
+      const root=window.phoneRoot;
+      if(root.parent){
+        root.parent.getWorldQuaternion(phoneParentQuaternion);
+        phoneRotationDelta.premultiply(phoneParentQuaternion.clone().invert()).multiply(phoneParentQuaternion);
+      }
+      root.quaternion.premultiply(phoneRotationDelta).normalize();
+      root.updateMatrixWorld(true);
+      phoneRotationVelocity.multiplyScalar(decay);
+      updatePhoneRotationReset();
+    }else phoneRotationVelocity.set(0,0,0);
+  }
+  if(window.__physFrame)window.__physFrame();
+  ren.render(scene,cam);
+})();
 </script>
 <script>
 // ===== Charm cloth physics (position-based dynamics, MagicaCloth-style) =====
@@ -582,7 +648,7 @@ function step(S,h){
       for(const i of S.body){const mm=S.m[i]*(g&&g.i===i?10:1);tmp.subVectors(S.x[i],C).multiplyScalar(mm);tmp2.subVectors(S.X0[i],C0);a0.addScaledVector(tmp,tmp2.x);a1.addScaledVector(tmp,tmp2.y);a2.addScaledVector(tmp,tmp2.z)}
       extractRot(a0,a1,a2,S.qBody);
       for(const i of S.body)S.x[i].subVectors(S.X0[i],C0).applyQuaternion(S.qBody).add(C)}
-    if(box)for(let i=0;i<n;i++){if(S.pinned[i])continue;const rr=S.rad[i]*sc*(S.type[i]?0.7:1);tmp.copy(S.x[i]).applyMatrix4(rootInv);
+    if(box&&!$('disablePhoneCollision').checked)for(let i=0;i<n;i++){if(S.pinned[i])continue;const rr=S.rad[i]*sc*(S.type[i]?0.7:1);tmp.copy(S.x[i]).applyMatrix4(rootInv);
       if(tmp.x>box.min.x-rr&&tmp.x<box.max.x+rr&&tmp.y>box.min.y-rr&&tmp.y<box.max.y+rr&&tmp.z>box.min.z-rr&&tmp.z<box.max.z+rr){
         const d=[tmp.x-(box.min.x-rr),box.max.x+rr-tmp.x,tmp.y-(box.min.y-rr),box.max.y+rr-tmp.y,tmp.z-(box.min.z-rr),box.max.z+rr-tmp.z];let b=0;for(let j=1;j<6;j++)if(d[j]<d[b])b=j;
         const ax='xyz'[b>>1];tmp[ax]=(b&1)?box.max[ax]+rr:box.min[ax]-rr;S.x[i].copy(tmp).applyMatrix4(window.phoneRoot.matrixWorld)}}
@@ -624,7 +690,7 @@ function enable(){
   ensurePhone();P.sim=S;S.meshes.forEach(m=>m.frustumCulled=false);hat.g.updateMatrixWorld(true);resetPos(S);acc=0;last=performance.now()/1000;
 }
 function cleanup(restore){P.grab=null;if(P.ph)P.ph.dragging=false;if(P.sim&&restore&&hat.g)restoreGeo(P.sim);P.sim=null;phoneHome()}
-function setOn(on){P.on=on;$('physOpts').style.display=on?'flex':'none';$('physDrag').disabled=!on;if(!on){$('physDrag').checked=false;P.drag=false;cleanup(true);hint.textContent='';ren.domElement.style.cursor=''}else enable()}
+function setOn(on){P.on=on;$('physOpts').style.display=on?'flex':'none';$('physDrag').disabled=!on;$('disablePhoneCollision').disabled=!on;if(!on){$('physDrag').checked=false;$('disablePhoneCollision').checked=false;P.drag=false;cleanup(true);hint.textContent='';ren.domElement.style.cursor=''}else enable()}
 $('phys').addEventListener('change',e=>setOn(e.target.checked));
 $('physDrag').addEventListener('change',e=>{P.drag=e.target.checked;if(!P.drag){P.grab=null;if(P.ph)P.ph.dragging=false;ren.domElement.style.cursor=''}});
 $('physReset').addEventListener('click',()=>{gIn.value='40';dIn.value='20';if(!P.on)return;cleanup(true);enable()});
@@ -649,6 +715,15 @@ function pick(){const hs=hat.g?rc.intersectObject(hat.g,true).filter(h=>vis(h.ob
   if(b)return{kind:'phone',point:b.point};return null}
 function ready(){return P.on&&P.drag&&P.sim&&hat.g&&hat.g.visible}
 $('view').addEventListener('pointerdown',e=>{
+  if($('phoneRotateDrag').checked&&e.button===0&&window.phoneRoot){
+    // Only begin phone rotation when the pointer actually hits the phone model.
+    rayAt(e);const phoneHits=rc.intersectObject(window.phoneRoot,true).filter(h=>vis(h.object));
+    if(!phoneHits.length)return;
+    e.preventDefault();e.stopPropagation();e.stopImmediatePropagation();
+    phoneRotationVelocity.set(0,0,0);
+    phoneRotatePointer={id:e.pointerId,x:e.clientX,y:e.clientY,time:e.timeStamp};
+    dom.setPointerCapture?.(e.pointerId);dom.style.cursor='grabbing';return;
+  }
   if(!ready()||e.button!==0||P.grab||(P.ph&&P.ph.dragging))return;rayAt(e);const p=pick();if(!p)return;
   e.stopPropagation();e.preventDefault();cam.getWorldDirection(tmp);plane.setFromNormalAndCoplanarPoint(tmp,p.point);
   if(p.kind==='charm'){let bi=p.pi,bd=1e30;if(bi==null)P.sim.x.forEach((x,i)=>{if(P.sim.pinned[i])return;const d=x.distanceToSquared(p.point);if(d<bd){bd=d;bi=i}});
@@ -657,10 +732,35 @@ $('view').addEventListener('pointerdown',e=>{
   dom.style.cursor='grabbing';
 },true);
 addEventListener('pointermove',e=>{
+  if(phoneRotatePointer&&e.pointerId===phoneRotatePointer.id&&window.phoneRoot){
+    const dx=e.clientX-phoneRotatePointer.x,dy=e.clientY-phoneRotatePointer.y;
+    const elapsed=Math.max(1/240,Math.min(0.1,(e.timeStamp-phoneRotatePointer.time)/1000));
+    phoneRotatePointer.x=e.clientX;phoneRotatePointer.y=e.clientY;phoneRotatePointer.time=e.timeStamp;
+    if(Math.abs(dx)+Math.abs(dy)>0){
+      const height=Math.max(1,dom.clientHeight);
+      phoneRotationAxis.set(dy,dx,0).multiplyScalar(2*Math.PI/height);
+      const angle=Math.min(Math.PI/2,phoneRotationAxis.length());
+      if(angle>1e-8){
+        cam.getWorldQuaternion(phoneCameraQuaternion);
+        phoneRotationAxis.normalize().applyQuaternion(phoneCameraQuaternion);
+        phoneRotationDelta.setFromAxisAngle(phoneRotationAxis,angle);
+        const root=window.phoneRoot;
+        if(root.parent){
+          root.parent.getWorldQuaternion(phoneParentQuaternion);
+          phoneRotationDelta.premultiply(phoneParentQuaternion.clone().invert()).multiply(phoneParentQuaternion);
+        }
+        root.quaternion.premultiply(phoneRotationDelta).normalize();
+        root.updateMatrixWorld(true);
+        phoneRotationVelocity.multiplyScalar(0.4).addScaledVector(phoneRotationAxis,Math.min(5,angle/elapsed)*0.6);
+        updatePhoneRotationReset();
+      }
+    }
+    return;
+  }
   if(P.grab&&e.pointerId===P.grab.id){rayAt(e);if(rc.ray.intersectPlane(plane,hit))P.grab.target.copy(hit).add(P.grab.off);return}
   const ph=P.ph;if(ph&&ph.dragging&&e.pointerId===ph.id){rayAt(e);if(rc.ray.intersectPlane(plane,hit))ph.target.copy(ph.base).add(hit).sub(ph.start);return}
   if(ready()&&e.target===dom){rayAt(e);dom.style.cursor=pick()?'grab':''}});
-const release=e=>{if(P.grab&&e.pointerId===P.grab.id)P.grab=null;if(P.ph&&P.ph.dragging&&e.pointerId===P.ph.id)P.ph.dragging=false;if(!P.grab&&!(P.ph&&P.ph.dragging))dom.style.cursor=''};
+const release=e=>{if(phoneRotatePointer&&e.pointerId===phoneRotatePointer.id){phoneRotatePointer=null;dom.style.cursor=$('phoneRotateDrag').checked?'grab':'';}if(P.grab&&e.pointerId===P.grab.id)P.grab=null;if(P.ph&&P.ph.dragging&&e.pointerId===P.ph.id)P.ph.dragging=false;if(!phoneRotatePointer&&!P.grab&&!(P.ph&&P.ph.dragging))dom.style.cursor=$('phoneRotateDrag').checked?'grab':''};
 addEventListener('pointerup',release);addEventListener('pointercancel',release);
 })();
 
